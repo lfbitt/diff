@@ -18,6 +18,7 @@ import org.fog.entities.Sensor;
 import org.fog.utils.Config;
 import org.fog.utils.FogEvents;
 import org.fog.utils.FogUtils;
+import org.fog.utils.ModuleLaunchConfig;
 import org.fog.utils.NetworkUsageMonitor;
 import org.fog.utils.TimeKeeper;
 
@@ -31,14 +32,15 @@ public class Controller extends SimEntity{
 	
 	private Map<String, Application> applications;
 	private Map<String, Integer> appLaunchDelays;
+	private ModuleMapping moduleMapping;
+	private Map<Integer, Double> globalCurrentCpuLoad;
 
-	private Map<String, ModulePlacement> appModulePlacementPolicy;
-	
-	public Controller(String name, List<FogDevice> fogDevices, List<Sensor> sensors, List<Actuator> actuators) {
+	public Controller(String name, List<FogDevice> fogDevices, List<Sensor> sensors, List<Actuator> actuators, ModuleMapping moduleMapping) {
 		super(name);
 		this.applications = new HashMap<String, Application>();
+		this.globalCurrentCpuLoad = new HashMap <Integer, Double>();
 		setAppLaunchDelays(new HashMap<String, Integer>());
-		setAppModulePlacementPolicy(new HashMap<String, ModulePlacement>());
+		setModuleMapping(moduleMapping);
 		for(FogDevice fogDevice : fogDevices){
 			fogDevice.setControllerId(getId());
 		}
@@ -46,6 +48,25 @@ public class Controller extends SimEntity{
 		setActuators(actuators);
 		setSensors(sensors);
 		connectWithLatencies();
+		initializeCPULoads();
+	}
+
+	private void initializeCPULoads() {
+//		Map<String, Map<String, Integer>> mapping = moduleMapping.getModuleMapping();
+//		for(String deviceName : mapping.keySet()){
+//			FogDevice device = getDeviceByName(deviceName);
+//			for(String moduleName : mapping.get(deviceName).keySet()){
+//				
+//				AppModule module = getApplication().getModuleByName(moduleName);
+//				if(module == null)
+//					continue;
+//				getCurrentCpuLoad().put(device.getId(), getCurrentCpuLoad().get(device.getId()).doubleValue() + module.getMips());
+//			}
+//		}
+		for(FogDevice device : getFogDevices()){
+			this.globalCurrentCpuLoad.put(device.getId(), 0.0);
+		}
+
 	}
 
 	private FogDevice getFogDeviceById(int id){
@@ -110,7 +131,8 @@ public class Controller extends SimEntity{
 	}
 	
 	private void printNetworkUsageDetails() {
-		System.out.println("Total network usage = "+NetworkUsageMonitor.getNetworkUsage()/Config.MAX_SIMULATION_TIME);		
+		System.out.println("Total network usage = "+NetworkUsageMonitor.getNetworkUsage()/Config.MAX_SIMULATION_TIME);
+		
 	}
 
 	private FogDevice getCloud(){
@@ -123,8 +145,8 @@ public class Controller extends SimEntity{
 	private void printCostDetails(){
 		System.out.println("Cost of execution in cloud = "+getCloud().getTotalCost());
 	}
-	
 	private void printPowerDetails() {
+		// TODO Auto-generated method stub
 		for(FogDevice fogDevice : getFogDevices()){
 			System.out.println(fogDevice.getName() + " : Energy Consumed = "+fogDevice.getEnergyConsumption());
 		}
@@ -180,15 +202,15 @@ public class Controller extends SimEntity{
 	}
 	
 	@Override
-	public void shutdownEntity() {	
+	public void shutdownEntity() {
+		// TODO Auto-generated method stub
+		
 	}
 	
-	public void submitApplication(Application application, int delay, ModulePlacement modulePlacement){
+	public void submitApplication(Application application, int delay){
 		FogUtils.appIdToGeoCoverageMap.put(application.getAppId(), application.getGeoCoverage());
 		getApplications().put(application.getAppId(), application);
 		getAppLaunchDelays().put(application.getAppId(), delay);
-		getAppModulePlacementPolicy().put(application.getAppId(), modulePlacement);
-		
 		for(Sensor sensor : sensors){
 			sensor.setApp(getApplications().get(sensor.getAppId()));
 		}
@@ -204,12 +226,10 @@ public class Controller extends SimEntity{
 						application.getModuleByName(moduleName).subscribeActuator(actuator.getId(), edge.getTupleType());
 				}
 			}
-		}	
+		}
+		
 	}
 	
-	public void submitApplication(Application application, ModulePlacement modulePlacement){
-		submitApplication(application, 0, modulePlacement);
-	}
 	
 	
 	private void processAppSubmit(SimEvent ev){
@@ -222,16 +242,30 @@ public class Controller extends SimEntity{
 		FogUtils.appIdToGeoCoverageMap.put(application.getAppId(), application.getGeoCoverage());
 		getApplications().put(application.getAppId(), application);
 		
-		ModulePlacement modulePlacement = getAppModulePlacementPolicy().get(application.getAppId());
+		ModulePlacement modulePlacement = null;
+		if(application.getPlacementStrategy().equals("Edgewards")) {
+			System.out.println("Placing application " + application.getAppId() + " using Edgewards...");
+			 modulePlacement = new ModulePlacementEdgewards(getFogDevices(), getSensors(), getActuators(), application, getModuleMapping(), globalCurrentCpuLoad);
+		}
+		else if(application.getPlacementStrategy().equals("Mapping")) {
+			System.out.println("Placing application " + application.getAppId() + " using Mapping...");
+			 modulePlacement = new ModulePlacementMapping(getFogDevices(), application, getModuleMapping(), globalCurrentCpuLoad);
+		}
+		
 		for(FogDevice fogDevice : fogDevices){
 			sendNow(fogDevice.getId(), FogEvents.ACTIVE_APP_UPDATE, application);
 		}
 		
 		Map<Integer, List<AppModule>> deviceToModuleMap = modulePlacement.getDeviceToModuleMap();
+		Map<Integer, Map<String, Integer>> instanceCountMap = modulePlacement.getModuleInstanceCountMap();
+		System.out.println("deviceToModuleMap: " + deviceToModuleMap);
+		System.out.println("instanceCountMap: " + instanceCountMap);
 		for(Integer deviceId : deviceToModuleMap.keySet()){
 			for(AppModule module : deviceToModuleMap.get(deviceId)){
 				sendNow(deviceId, FogEvents.APP_SUBMIT, application);
 				sendNow(deviceId, FogEvents.LAUNCH_MODULE, module);
+				sendNow(deviceId, FogEvents.LAUNCH_MODULE_INSTANCE, 
+						new ModuleLaunchConfig(module, instanceCountMap.get(deviceId).get(module.getName())));
 			}
 		}
 	}
@@ -259,6 +293,12 @@ public class Controller extends SimEntity{
 	public void setApplications(Map<String, Application> applications) {
 		this.applications = applications;
 	}
+	public ModuleMapping getModuleMapping() {
+		return moduleMapping;
+	}
+	public void setModuleMapping(ModuleMapping moduleMapping) {
+		this.moduleMapping = moduleMapping;
+	}
 
 	public List<Sensor> getSensors() {
 		return sensors;
@@ -277,12 +317,14 @@ public class Controller extends SimEntity{
 	public void setActuators(List<Actuator> actuators) {
 		this.actuators = actuators;
 	}
-
-	public Map<String, ModulePlacement> getAppModulePlacementPolicy() {
-		return appModulePlacementPolicy;
+	
+	public Map<Integer, Double> getGlobalCPULoad() {
+		return globalCurrentCpuLoad;
 	}
-
-	public void setAppModulePlacementPolicy(Map<String, ModulePlacement> appModulePlacementPolicy) {
-		this.appModulePlacementPolicy = appModulePlacementPolicy;
+	
+	public void setGlobalCPULoad(Map<Integer, Double> currentCpuLoad) {
+		for(FogDevice device : getFogDevices()){
+			this.globalCurrentCpuLoad.put(device.getId(), currentCpuLoad.get(device.getId()));
+		}
 	}
 }

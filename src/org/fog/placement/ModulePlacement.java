@@ -20,6 +20,7 @@ public abstract class ModulePlacement {
 	private Application application;
 	private Map<String, List<Integer>> moduleToDeviceMap;
 	private Map<Integer, List<AppModule>> deviceToModuleMap;
+	//private Map<Integer, Map<String, Integer>> moduleInstanceCountMap;
 	private Map<Integer, Map<String, Integer>> moduleInstanceCountMap;
 	
 	protected abstract void mapModules();
@@ -42,6 +43,7 @@ public abstract class ModulePlacement {
 	
 	protected boolean createModuleInstanceOnDevice(AppModule _module, final FogDevice device){
 		AppModule module = null;
+		if(_module == null) return false;
 		if(getModuleToDeviceMap().containsKey(_module.getName()))
 			module = new AppModule(_module);
 		else
