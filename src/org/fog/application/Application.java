@@ -23,6 +23,7 @@ public class Application {
 	private String appId;
 	private int userId;
 	private GeoCoverage geoCoverage;
+	private String placementStrategy;
 
 	/**
 	 * List of application modules in the application
@@ -56,15 +57,15 @@ public class Application {
 	 * @param moduleName
 	 * @param ram
 	 */
-	public void addAppModule(String moduleName, int ram){
-		int mips = 1000;
+	public void addAppModule(String moduleName, int ram, int mips){
+		//int mips = 1000;
 		long size = 10000;
 		long bw = 1000;
 		String vmm = "Xen";
 		
 		AppModule module = new AppModule(FogUtils.generateEntityId(), moduleName, appId, userId, 
 				mips, ram, bw, size, vmm, new TupleScheduler(mips, 1), new HashMap<Pair<String, String>, SelectivityModel>());
-		
+	
 		getModules().add(module);
 		
 	}
@@ -172,7 +173,7 @@ public class Application {
 	 * @param sourceDeviceId
 	 * @return
 	 */
-	public List<Tuple> getResultantTuples(String moduleName, Tuple inputTuple, int sourceDeviceId, int sourceModuleId){
+	public List<Tuple> getResultantTuples(String moduleName, Tuple inputTuple, int sourceDeviceId){
 		List<Tuple> tuples = new ArrayList<Tuple>();
 		AppModule module = getModuleByName(moduleName);
 		for(AppEdge edge : getEdges()){
@@ -203,7 +204,6 @@ public class Application {
 							tuple.setDirection(Tuple.ACTUATOR);
 							tuple.setTupleType(edge.getTupleType());
 							tuple.setSourceDeviceId(sourceDeviceId);
-							tuple.setSourceModuleId(sourceModuleId);
 							//tuple.setActuatorId(actuatorId);
 							
 							tuples.add(tuple);
@@ -225,8 +225,6 @@ public class Application {
 						tuple.setSrcModuleName(edge.getSource());
 						tuple.setDirection(edge.getDirection());
 						tuple.setTupleType(edge.getTupleType());
-						tuple.setSourceModuleId(sourceModuleId);
-
 						tuples.add(tuple);
 					}
 				}
@@ -241,7 +239,7 @@ public class Application {
 	 * @param sourceDeviceId
 	 * @return
 	 */
-	public Tuple createTuple(AppEdge edge, int sourceDeviceId, int sourceModuleId){
+	public Tuple createTuple(AppEdge edge, int sourceDeviceId){
 		AppModule module = getModuleByName(edge.getSource());
 		if(edge.getEdgeType() == AppEdge.ACTUATOR){
 			for(Integer actuatorId : module.getActuatorSubscriptions().get(edge.getTupleType())){
@@ -262,8 +260,7 @@ public class Application {
 				tuple.setTupleType(edge.getTupleType());
 				tuple.setSourceDeviceId(sourceDeviceId);
 				tuple.setActuatorId(actuatorId);
-				tuple.setSourceModuleId(sourceModuleId);
-
+				
 				return tuple;
 			}
 		}else{
@@ -283,13 +280,11 @@ public class Application {
 			tuple.setSrcModuleName(edge.getSource());
 			tuple.setDirection(edge.getDirection());
 			tuple.setTupleType(edge.getTupleType());
-			tuple.setSourceModuleId(sourceModuleId);
-
 			return tuple;
 		}
 		return null;
 	}
-	
+		
 	public String getAppId() {
 		return appId;
 	}
@@ -321,6 +316,14 @@ public class Application {
 
 	public void setLoops(List<AppLoop> loops) {
 		this.loops = loops;
+	}
+	
+	public String getPlacementStrategy() {
+		return placementStrategy;
+	}
+	
+	public void setPlacementStrategy(String strategy) {
+		this.placementStrategy = strategy;
 	}
 
 	public int getUserId() {

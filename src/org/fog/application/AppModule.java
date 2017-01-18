@@ -7,6 +7,8 @@ import java.util.Map;
 
 import org.apache.commons.math3.util.Pair;
 import org.cloudbus.cloudsim.CloudletScheduler;
+import org.cloudbus.cloudsim.Datacenter;
+import org.cloudbus.cloudsim.core.CloudSimTags;
 import org.cloudbus.cloudsim.power.PowerVm;
 import org.fog.application.selectivity.SelectivityModel;
 import org.fog.scheduler.TupleScheduler;
@@ -22,17 +24,6 @@ public class AppModule extends PowerVm{
 	private String name;
 	private String appId;
 	private Map<Pair<String, String>, SelectivityModel> selectivityMap;
-	
-	/**
-	 * A map from the AppModules sending tuples UP to this module to their instance IDs.
-	 * If a new instance ID is detected, the number of instances is incremented.  
-	 */
-	private Map<String, List<Integer>> downInstanceIdsMaps;
-	
-	/**
-	 * Number of instances of this module
-	 */
-	private int numInstances;
 	
 	/**
 	 * Mapping from tupleType emitted by this AppModule to Actuators subscribing to that tupleType
@@ -72,8 +63,6 @@ public class AppModule extends PowerVm{
 		setCurrentAllocatedSize(0);
 		setSelectivityMap(selectivityMap);
 		setActuatorSubscriptions(new HashMap<String, List<Integer>>());
-		setNumInstances(0);
-		setDownInstanceIdsMaps(new HashMap<String, List<Integer>>());
 	}
 	public AppModule(AppModule operator) {
 		super(FogUtils.generateEntityId(), operator.getUserId(), operator.getMips(), 1, operator.getRam(), operator.getBw(), operator.getSize(), 1, operator.getVmm(), new TupleScheduler(operator.getMips(), 1), operator.getSchedulingInterval());
@@ -86,7 +75,6 @@ public class AppModule extends PowerVm{
 		setCurrentAllocatedRam(0);
 		setCurrentAllocatedSize(0);
 		setSelectivityMap(operator.getSelectivityMap());
-		setDownInstanceIdsMaps(new HashMap<String, List<Integer>>());
 	}
 	
 	public void subscribeActuator(int id, String tuplyType){
@@ -95,6 +83,7 @@ public class AppModule extends PowerVm{
 		getActuatorSubscriptions().get(tuplyType).add(id);
 	}
 	
+
 	public String getName() {
 		return name;
 	}
@@ -118,17 +107,5 @@ public class AppModule extends PowerVm{
 	}
 	public void setActuatorSubscriptions(Map<String, List<Integer>> actuatorSubscriptions) {
 		this.actuatorSubscriptions = actuatorSubscriptions;
-	}
-	public Map<String, List<Integer>> getDownInstanceIdsMaps() {
-		return downInstanceIdsMaps;
-	}
-	public void setDownInstanceIdsMaps(Map<String, List<Integer>> downInstanceIdsMaps) {
-		this.downInstanceIdsMaps = downInstanceIdsMaps;
-	}
-	public int getNumInstances() {
-		return numInstances;
-	}
-	public void setNumInstances(int numInstances) {
-		this.numInstances = numInstances;
 	}
 }
